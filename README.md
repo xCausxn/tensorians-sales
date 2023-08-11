@@ -9,3 +9,7 @@ TENSOR_API_KEY = Your Tensor.so API key
 SLUGS = comma separated list of slugs to monitor
 WEBHOOK_URLS = comma separated list of discord webhook urls to send notifications to
 ```
+
+😉
+
+Solana - 3iC6FuZXaUWUPeNU6kpZiyVxep1v3hL8MvqRTcfvyif8
