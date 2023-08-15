@@ -5,32 +5,86 @@ import { EmbedBuilder, WebhookClient } from "discord.js";
 
 import TensorService, { TensorTransaction } from "./services/TensorService";
 import { nonEmptyStrValidator, roundToDecimal, smartTruncate } from "./utils";
-import { cleanEnv, makeValidator, str } from "envalid";
+import { cleanEnv } from "envalid";
 import { TwitterApi } from "twitter-api-v2";
 import { getSimplePrice } from "./lib/coingecko";
 import { fileTypeFromBuffer } from "file-type";
 
-const LAMPORTS_PER_SOL = 1000000000;
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
-async function createDiscordSaleEmbed(transaction: TensorTransaction) {
+const enum RarityTier {
+  Mythic = "Mythic",
+  Legendary = "Legendary",
+  Epic = "Epic",
+  Rare = "Rare",
+  Uncommon = "Uncommon",
+  Common = "Common",
+}
+
+const RarityTierPercentages = {
+  [RarityTier.Mythic]: 0.01,
+  [RarityTier.Legendary]: 0.05,
+  [RarityTier.Epic]: 0.15,
+  [RarityTier.Rare]: 0.35,
+  [RarityTier.Uncommon]: 0.6,
+  [RarityTier.Common]: 1,
+};
+
+function getRarityTier(rarityRank: number, maxSupply: number): RarityTier {
+  const rarityPercentage = rarityRank / maxSupply;
+
+  for (const [rarityTier, rarityPercentageThreshold] of Object.entries(
+    RarityTierPercentages
+  )) {
+    if (rarityPercentage <= rarityPercentageThreshold) {
+      return rarityTier as RarityTier;
+    }
+  }
+
+  return RarityTier.Common;
+}
+
+function getRarityColorOrb(rarityTier: RarityTier): string {
+  switch (rarityTier) {
+    case RarityTier.Mythic:
+      return "🔴";
+    case RarityTier.Legendary:
+      return "🟠";
+    case RarityTier.Epic:
+      return "🟣";
+    case RarityTier.Rare:
+      return "🔵";
+    case RarityTier.Uncommon:
+      return "🟢";
+    default:
+      return "⚪️";
+  }
+}
+
+async function createDiscordSaleEmbed(
+  transaction: TensorTransaction,
+  extra: { stats: { buyNowPriceNetFees: number; numMints: number } }
+) {
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
   const imageUri = transaction.mint.imageUri;
-  const lastSale = transaction.mint.lastSale;
   const buyerId = transaction.tx.buyerId;
   const sellerId = transaction.tx.sellerId;
+  const rank = transaction.mint.rarityRankTT;
 
   const grossSaleAmount = transaction.tx.grossAmount;
 
   const buyerMessage = buyerId
-    ? `[${smartTruncate(
-        buyerId
+    ? `[${buyerId.slice(
+        0,
+        4
       )}](https://www.tensor.trade/portfolio?wallet=${buyerId})`
     : "Unknown";
 
   const sellerMessage = sellerId
-    ? `[${smartTruncate(
-        sellerId
+    ? `[${sellerId.slice(
+        0,
+        4
       )}](https://www.tensor.trade/portfolio?wallet=${sellerId})`
     : "n/a";
 
@@ -47,11 +101,30 @@ async function createDiscordSaleEmbed(transaction: TensorTransaction) {
     style: "currency",
   });
 
+  const rarityClass = getRarityTier(rank, extra.stats.numMints || 10_000);
+  const rarityOrb = getRarityColorOrb(rarityClass);
+
+  const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})`;
+
+  const faction =
+    transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")
+      ?.value || "";
+
+  const transactionLinks = [
+    `[Tensor](https://www.tensor.trade/tx/${transaction.tx.txId})`,
+    `[XRAY](https://xray.helius.xyz/tx/${transaction.tx.txId})`,
+  ];
+
   const embed = new EmbedBuilder()
     .setTitle(`${nftName}`)
+    .setDescription(rarityMessage)
     .setURL(`https://tensor.trade/item/${onchainId}`)
     .setThumbnail(imageUri)
     .addFields([
+      {
+        name: "Faction",
+        value: faction,
+      },
       {
         name: "Price",
         value: `${roundToDecimal(
@@ -60,8 +133,19 @@ async function createDiscordSaleEmbed(transaction: TensorTransaction) {
         )} ◎ (${formattedUsdPrice})`,
       },
       {
+        name: "Floor",
+        value: `${roundToDecimal(
+          extra.stats.buyNowPriceNetFees / LAMPORTS_PER_SOL,
+          2
+        )} ◎`,
+      },
+      {
         name: "Wallets",
         value: buyerSellerMessage,
+      },
+      {
+        name: "TX",
+        value: transactionLinks.join(" | "),
       },
     ])
     .setFooter({
@@ -69,15 +153,6 @@ async function createDiscordSaleEmbed(transaction: TensorTransaction) {
       text: "Tensor Trade",
     })
     .setTimestamp();
-
-  if (lastSale && lastSale.price) {
-    embed.addFields([
-      {
-        name: "Last sale",
-        value: `${roundToDecimal(lastSale.price / LAMPORTS_PER_SOL, 2)} ◎`,
-      },
-    ]);
-  }
 
   return embed;
 }
@@ -100,14 +175,15 @@ async function getImageBuffer(imageUri: string): Promise<Buffer | null> {
 
 async function sendTwitterSaleTweet(
   twitterClient: TwitterApi,
-  transaction: TensorTransaction
+  transaction: TensorTransaction,
+  extra: { stats: { buyNowPriceNetFees: number; numMints: number } }
 ) {
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
   const txId = transaction.tx.txId;
   const imageUri = transaction.mint.imageUri;
   const grossSaleAmount = transaction.tx.grossAmount;
-  const rarityRankTT = transaction.mint.rarityRankTT;
+  const rank = transaction.mint.rarityRankTT;
 
   const conversions = await getSimplePrice("solana", "usd");
   const usdConversion = conversions["solana"].usd;
@@ -123,10 +199,23 @@ async function sendTwitterSaleTweet(
   const marketplaceUrl = `https://tensor.trade/item/${onchainId}`;
 
   const usdMessage = usdPrice != null ? `💵 ${formattedUsdPrice} USD\n` : "";
-  const rankMessage =
-    rarityRankTT != null ? `🏅 ${rarityRankTT} on Tensor\n` : "";
 
-  const message = `😲 ${nftName} SOLD for ${solanaPrice} ◎\n${usdMessage}${rankMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
+  const rarityClass = getRarityTier(rank, extra.stats.numMints || 10_000);
+  const rarityOrb = getRarityColorOrb(rarityClass);
+
+  const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})`;
+  const floorMessage = `📈 ${roundToDecimal(
+    extra.stats.buyNowPriceNetFees,
+    2
+  )} ◎\n`;
+
+  const faction =
+    transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")
+      ?.value || "";
+
+  const factionMessage = faction ? `👥 ${faction}\n` : "";
+
+  const message = `😲 ${nftName} SOLD for ${solanaPrice} ◎\n${usdMessage}${floorMessage}${rarityMessage}${factionMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
 
   const imageBuffer = await getImageBuffer(imageUri);
   let mediaIds: string[] = [];
@@ -168,7 +257,7 @@ function logSaleToConsole(transaction: TensorTransaction) {
 }
 
 async function main() {
-  const TENSOR_WEBSOCKET_URL = "wss://api.tensor.so/graphql";
+  const TENSOR_API_URL = "https://api.tensor.so/graphql";
 
   const env = cleanEnv(process.env, {
     TENSOR_API_KEY: nonEmptyStrValidator(),
@@ -191,10 +280,7 @@ async function main() {
     accessSecret: env.TWITTER_ACCESS_TOKEN_SECRET,
   });
 
-  const tensorService = new TensorService(
-    TENSOR_WEBSOCKET_URL,
-    env.TENSOR_API_KEY
-  );
+  const tensorService = new TensorService(TENSOR_API_URL, env.TENSOR_API_KEY);
 
   await tensorService.connect();
 
@@ -202,16 +288,18 @@ async function main() {
     await tensorService.subscribeToSlug(slug);
   }
 
-  tensorService.on("transaction", async (transaction) => {
-    const allowedTxTypes = ["SALE_BUY_NOW"];
+  tensorService.on("transaction", async (transaction, slug) => {
+    const allowedTxTypes = ["SALE_BUY_NOW", "SALE_ACCEPT_BID"];
 
     if (!allowedTxTypes.includes(transaction.tx.txType)) {
       return;
     }
 
+    const stats = await tensorService.getCollectionStats(slug);
+
     logSaleToConsole(transaction);
 
-    const embed = await createDiscordSaleEmbed(transaction);
+    const embed = await createDiscordSaleEmbed(transaction, { stats });
 
     for (const webhook of discordWebhooks) {
       try {
@@ -222,7 +310,7 @@ async function main() {
     }
 
     try {
-      await sendTwitterSaleTweet(twitterClient, transaction);
+      await sendTwitterSaleTweet(twitterClient, transaction, { stats });
     } catch (err) {
       console.error(err);
     }

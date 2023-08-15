@@ -50,10 +50,16 @@ export interface TensorTransaction {
 }
 
 declare interface TensorService {
-  on(event: "transaction", listener: (arg: TensorTransaction) => void): this;
-  on(event: string, listener: (arg: TensorTransaction) => void): this;
+  on(
+    event: "transaction",
+    listener: (transaction: TensorTransaction, slug: string) => void
+  ): this;
+  on(
+    event: string,
+    listener: (transaction: TensorTransaction, slug: string) => void
+  ): this;
   on(event: string, listener: Function): this;
-  emit(event: any, arg: TensorTransaction): boolean;
+  emit(event: any, transaction: TensorTransaction, slug: string): boolean;
 }
 
 class TensorService extends EventEmitter {
@@ -64,6 +70,9 @@ class TensorService extends EventEmitter {
   // store id of subscription to unsubscribe later
   private subscribedSlugs = new Map<string, string>();
   private timer: NodeJS.Timeout | null = null;
+
+  // basic cache
+  private cache = new Map<string, { expires: number; data: any }>();
 
   constructor(url: string, apiKey: string) {
     super();
@@ -98,7 +107,7 @@ class TensorService extends EventEmitter {
           })
         );
 
-        this.ws.on("message", (data) => {
+        this.ws?.on("message", (data) => {
           const json = JSON.parse(data.toString());
           if (json?.type === "pong") {
             return;
@@ -109,7 +118,14 @@ class TensorService extends EventEmitter {
           if (json?.payload?.data?.newTransactionTV2) {
             const transaction = json.payload.data
               .newTransactionTV2 as TensorTransaction;
-            this.handleTransaction(transaction);
+            const id = json.id;
+
+            // find slug by id which is value in map
+            const slug = Array.from(this.subscribedSlugs.entries())
+              .find(([key, value]) => value === id)
+              ?.at(0);
+
+            this.handleTransaction(transaction, slug);
           }
         });
 
@@ -236,30 +252,84 @@ class TensorService extends EventEmitter {
     this.send(JSON.stringify(data));
   }
 
+  public async getCollectionStats(
+    slug: string
+  ): Promise<{ buyNowPriceNetFees: number; [key: string]: any }> {
+    const cacheKey = `collectionStats:${slug}`;
+
+    if (this.cache.has(cacheKey)) {
+      const cache = this.cache.get(cacheKey);
+      if (cache && cache.expires > Date.now()) {
+        return cache.data;
+      }
+    }
+
+    const payload = {
+      operationName: "Instrument",
+      variables: {
+        slug: slug,
+      },
+      query: `query Instrument($slug: String!) {
+        instrumentTV2(slug: $slug) {
+          statsV2 {
+            ...CollectionStatsV2
+            __typename
+          }
+          __typename
+        }
+      }`,
+    };
+
+    const headers = {
+      "X-TENSOR-API-KEY": this.apiKey,
+    };
+
+    const response = await fetch(this.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify([payload]),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch collection stats");
+    }
+
+    const json = await response.json();
+
+    const stats = json[0].data.instrumentTV2.statsV2;
+
+    this.cache.set(cacheKey, {
+      expires: Date.now() + 5 * 60 * 1000,
+      data: stats,
+    });
+
+    return stats;
+  }
+
   private checkForListener(event: string): boolean {
     return this.listenerCount(event) > 0;
   }
 
-  private handleTransaction(transaction: TensorTransaction) {
+  private handleTransaction(transaction: TensorTransaction, slug: string) {
     this.checkForListener("transaction") &&
-      this.emit("transaction", transaction);
+      this.emit("transaction", transaction, slug);
     const source = transaction.tx.source;
     const txType = transaction.tx.txType;
 
     if (this.checkForListener(`${source}:${txType}`)) {
-      this.emit(`${source}:${txType}`, transaction);
+      this.emit(`${source}:${txType}`, transaction, slug);
     }
 
     if (this.checkForListener(`${source}:*`)) {
-      this.emit(`${source}:*`, transaction);
+      this.emit(`${source}:*`, transaction, slug);
     }
 
     if (this.checkForListener(`*:${txType}`)) {
-      this.emit(`*:${txType}`, transaction);
+      this.emit(`*:${txType}`, transaction, slug);
     }
 
     if (this.checkForListener(`${txType}`)) {
-      this.emit(`${txType}`, transaction);
+      this.emit(`${txType}`, transaction, slug);
     }
   }
 }
