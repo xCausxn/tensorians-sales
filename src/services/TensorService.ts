@@ -253,9 +253,7 @@ class TensorService extends EventEmitter {
     this.send(JSON.stringify(data));
   }
 
-  public async getCollectionStats(
-    slug: string
-  ): Promise<{
+  public async getCollectionStats(slug: string): Promise<{
     buyNowPriceNetFees: number;
     numMints: number;
     [key: string]: any;
@@ -274,25 +272,19 @@ class TensorService extends EventEmitter {
       variables: {
         slug: slug,
       },
-      query: `query Instrument($slug: String!) {
-        instrumentTV2(slug: $slug) {
-          statsV2 {
-            ...CollectionStatsV2
-            __typename
-          }
-          __typename
-        }
-      }`,
+      query:
+        "query Instrument($slug: String!) {  instrumentTV2(slug: $slug) {    ...ReducedInstrument    __typename  }}fragment ReducedInstrument on InstrumentTV2 {  id  slug  slugDisplay  compressed  tensorWhitelisted  tensorVerified  tensorUnsupported  hidden  creator  name  symbol  imageUri  description  website  twitter  discord  tokenStandard  sellRoyaltyFeeBPS  statsV2 {    ...CollectionStatsV2    __typename  }  hswapWhitelisted  firstListDate  __typename}fragment CollectionStatsV2 on CollectionStatsV2 {  currency  buyNowPrice  buyNowPriceNetFees  sellNowPrice  sellNowPriceNetFees  numListed  numMints  floor1h  floor24h  floor7d  sales1h  sales24h  sales7d  salesAll  volume1h  volume24h  volume7d  volumeAll  pctListed  marketCap  __typename}",
     };
 
     const headers = {
       "X-TENSOR-API-KEY": this.apiKey,
+      "Content-Type": "application/json",
     };
 
     const response = await fetch(this.url, {
       method: "POST",
       headers,
-      body: JSON.stringify([payload]),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
