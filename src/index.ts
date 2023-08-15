@@ -12,7 +12,7 @@ import { fileTypeFromBuffer } from "file-type";
 
 const LAMPORTS_PER_SOL = 1000000000;
 
-function createDiscordSaleEmbed(transaction: TensorTransaction) {
+async function createDiscordSaleEmbed(transaction: TensorTransaction) {
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
   const imageUri = transaction.mint.imageUri;
@@ -36,6 +36,17 @@ function createDiscordSaleEmbed(transaction: TensorTransaction) {
 
   const buyerSellerMessage = `${sellerMessage} → ${buyerMessage}`;
 
+  const conversions = await getSimplePrice("solana", "usd");
+  const usdConversion = conversions["solana"].usd;
+
+  const solanaPrice = roundToDecimal(grossSaleAmount / LAMPORTS_PER_SOL, 2);
+  const usdPrice = solanaPrice * usdConversion;
+
+  const formattedUsdPrice = usdPrice.toLocaleString("en-US", {
+    currency: "USD",
+    style: "currency",
+  });
+
   const embed = new EmbedBuilder()
     .setTitle(`${nftName}`)
     .setURL(`https://tensor.trade/item/${onchainId}`)
@@ -43,23 +54,27 @@ function createDiscordSaleEmbed(transaction: TensorTransaction) {
     .addFields([
       {
         name: "Price",
-        value: `${roundToDecimal(grossSaleAmount / LAMPORTS_PER_SOL, 2)} ◎`,
+        value: `${roundToDecimal(
+          grossSaleAmount / LAMPORTS_PER_SOL,
+          2
+        )} ◎ (${formattedUsdPrice})`,
       },
       {
         name: "Wallets",
         value: buyerSellerMessage,
       },
     ])
+    .setFooter({
+      iconURL: "https://i.ibb.co/ZMRt7cp/tt.png",
+      text: "Tensor Trade",
+    })
     .setTimestamp();
 
   if (lastSale && lastSale.price) {
     embed.addFields([
       {
         name: "Last sale",
-        value: `${roundToDecimal(
-          lastSale.price / LAMPORTS_PER_SOL,
-          2
-        )} ◎ | Date ${new Date(lastSale.txAt).toISOString()}`,
+        value: `${roundToDecimal(lastSale.price / LAMPORTS_PER_SOL, 2)} ◎`,
       },
     ]);
   }
@@ -120,7 +135,7 @@ async function sendTwitterSaleTweet(
     if (imageBuffer) {
       const fileType = await fileTypeFromBuffer(imageBuffer);
       const mediaId = await twitterClient.v1.uploadMedia(imageBuffer, {
-        type: fileType?.mime,
+        mimeType: fileType?.mime,
       });
       mediaIds = [mediaId];
     }
@@ -196,7 +211,7 @@ async function main() {
 
     logSaleToConsole(transaction);
 
-    const embed = createDiscordSaleEmbed(transaction);
+    const embed = await createDiscordSaleEmbed(transaction);
 
     for (const webhook of discordWebhooks) {
       try {
