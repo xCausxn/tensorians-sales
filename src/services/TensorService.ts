@@ -84,7 +84,8 @@ class TensorService extends EventEmitter {
 
   public async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.url, ["graphql-transport-ws"], {
+      const wsUrl = this.url.replace(/^http/, "ws");
+      this.ws = new WebSocket(wsUrl, ["graphql-transport-ws"], {
         followRedirects: true,
         headers: {
           "X-TENSOR-API-KEY": this.apiKey,
@@ -254,7 +255,11 @@ class TensorService extends EventEmitter {
 
   public async getCollectionStats(
     slug: string
-  ): Promise<{ buyNowPriceNetFees: number; [key: string]: any }> {
+  ): Promise<{
+    buyNowPriceNetFees: number;
+    numMints: number;
+    [key: string]: any;
+  }> {
     const cacheKey = `collectionStats:${slug}`;
 
     if (this.cache.has(cacheKey)) {
