@@ -5,7 +5,7 @@ import { EmbedBuilder, WebhookClient } from "discord.js";
 
 import TensorService, { TensorTransaction } from "./services/TensorService";
 import { nonEmptyStrValidator, roundToDecimal, smartTruncate } from "./utils";
-import { cleanEnv } from "envalid";
+import { cleanEnv, str } from "envalid";
 import { TwitterApi } from "twitter-api-v2";
 import { getSimplePrice } from "./lib/coingecko";
 import { fileTypeFromBuffer } from "file-type";
@@ -33,9 +33,7 @@ const RarityTierPercentages = {
 function getRarityTier(rarityRank: number, maxSupply: number): RarityTier {
   const rarityPercentage = rarityRank / maxSupply;
 
-  for (const [rarityTier, rarityPercentageThreshold] of Object.entries(
-    RarityTierPercentages
-  )) {
+  for (const [rarityTier, rarityPercentageThreshold] of Object.entries(RarityTierPercentages)) {
     if (rarityPercentage <= rarityPercentageThreshold) {
       return rarityTier as RarityTier;
     }
@@ -75,17 +73,11 @@ async function createDiscordSaleEmbed(
   const grossSaleAmount = parseInt(transaction.tx.grossAmount, 10);
 
   const buyerMessage = buyerId
-    ? `[${buyerId.slice(
-        0,
-        4
-      )}](https://www.tensor.trade/portfolio?wallet=${buyerId})`
+    ? `[${buyerId.slice(0, 4)}](https://www.tensor.trade/portfolio?wallet=${buyerId})`
     : "Unknown";
 
   const sellerMessage = sellerId
-    ? `[${sellerId.slice(
-        0,
-        4
-      )}](https://www.tensor.trade/portfolio?wallet=${sellerId})`
+    ? `[${sellerId.slice(0, 4)}](https://www.tensor.trade/portfolio?wallet=${sellerId})`
     : "n/a";
 
   const buyerSellerMessage = `${sellerMessage} → ${buyerMessage}`;
@@ -107,18 +99,17 @@ async function createDiscordSaleEmbed(
   const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})`;
 
   const faction =
-    transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")
-      ?.value || "";
+    transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")?.value || "";
 
   const transactionLinks = [
-    `[Tensor](https://tensor.trade/item/${onchainId})`,
+    `[Tensor](https://www.tensor.trade/item/${onchainId})`,
     `[XRAY](https://xray.helius.xyz/tx/${transaction.tx.txId})`,
   ];
 
   const embed = new EmbedBuilder()
     .setTitle(`${nftName}`)
     .setDescription(rarityMessage)
-    .setURL(`https://tensor.trade/item/${onchainId}`)
+    .setURL(`https://www.tensor.trade/item/${onchainId}`)
     .setThumbnail(imageUri)
     .addFields([
       {
@@ -127,10 +118,7 @@ async function createDiscordSaleEmbed(
       },
       {
         name: "Price",
-        value: `${roundToDecimal(
-          grossSaleAmount / LAMPORTS_PER_SOL,
-          2
-        )} ◎ (${formattedUsdPrice})`,
+        value: `${roundToDecimal(grossSaleAmount / LAMPORTS_PER_SOL, 2)} ◎ (${formattedUsdPrice})`,
       },
       {
         name: "Floor",
@@ -144,7 +132,7 @@ async function createDiscordSaleEmbed(
         value: buyerSellerMessage,
       },
       {
-        name: "TX",
+        name: "Links",
         value: transactionLinks.join(" | "),
       },
     ])
@@ -196,7 +184,7 @@ async function sendTwitterSaleTweet(
     style: "currency",
   });
 
-  const marketplaceUrl = `https://tensor.trade/item/${onchainId}`;
+  const marketplaceUrl = `https://www.tensor.trade/item/${onchainId}`;
 
   const usdMessage = usdPrice != null ? `💵 ${formattedUsdPrice} USD\n` : "";
 
@@ -210,8 +198,7 @@ async function sendTwitterSaleTweet(
   )} ◎\n`;
 
   const faction =
-    transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")
-      ?.value || "";
+    transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")?.value || "";
 
   const factionMessage = faction ? `👥 ${faction}\n` : "";
 
@@ -257,9 +244,10 @@ function logSaleToConsole(transaction: TensorTransaction) {
 }
 
 async function main() {
-  const TENSOR_API_URL = "https://api.tensor.so/graphql";
-
   const env = cleanEnv(process.env, {
+    TENSOR_API_URL: str({
+      default: "https://api.tensor.so/graphql",
+    }),
     TENSOR_API_KEY: nonEmptyStrValidator(),
     DISCORD_WEBHOOKS: nonEmptyStrValidator(),
     SLUGS: nonEmptyStrValidator(),
@@ -280,7 +268,7 @@ async function main() {
     accessSecret: env.TWITTER_ACCESS_TOKEN_SECRET,
   });
 
-  const tensorService = new TensorService(TENSOR_API_URL, env.TENSOR_API_KEY);
+  const tensorService = new TensorService(env.TENSOR_API_URL, env.TENSOR_API_KEY);
 
   await tensorService.connect();
 
