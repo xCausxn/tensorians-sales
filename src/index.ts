@@ -63,7 +63,7 @@ function getRarityColorOrb(rarityTier: RarityTier): string {
 
 async function createDiscordSaleEmbed(
   transaction: TensorTransaction,
-  extra: { stats: { buyNowPriceNetFees: number; numMints: number } }
+  extra: { stats: { buyNowPriceNetFees: string; numMints: number } }
 ) {
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
@@ -72,7 +72,7 @@ async function createDiscordSaleEmbed(
   const sellerId = transaction.tx.sellerId;
   const rank = transaction.mint.rarityRankTT;
 
-  const grossSaleAmount = transaction.tx.grossAmount;
+  const grossSaleAmount = parseInt(transaction.tx.grossAmount, 10);
 
   const buyerMessage = buyerId
     ? `[${buyerId.slice(
@@ -135,7 +135,7 @@ async function createDiscordSaleEmbed(
       {
         name: "Floor",
         value: `${roundToDecimal(
-          extra.stats.buyNowPriceNetFees / LAMPORTS_PER_SOL,
+          parseInt(extra.stats.buyNowPriceNetFees, 10) / LAMPORTS_PER_SOL,
           2
         )} ◎`,
       },
@@ -176,13 +176,13 @@ async function getImageBuffer(imageUri: string): Promise<Buffer | null> {
 async function sendTwitterSaleTweet(
   twitterClient: TwitterApi,
   transaction: TensorTransaction,
-  extra: { stats: { buyNowPriceNetFees: number; numMints: number } }
+  extra: { stats: { buyNowPriceNetFees: string; numMints: number } }
 ) {
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
   const txId = transaction.tx.txId;
   const imageUri = transaction.mint.imageUri;
-  const grossSaleAmount = transaction.tx.grossAmount;
+  const grossSaleAmount = parseInt(transaction.tx.grossAmount, 10);
   const rank = transaction.mint.rarityRankTT;
 
   const conversions = await getSimplePrice("solana", "usd");
@@ -203,9 +203,9 @@ async function sendTwitterSaleTweet(
   const rarityClass = getRarityTier(rank, extra.stats.numMints || 10_000);
   const rarityOrb = getRarityColorOrb(rarityClass);
 
-  const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})`;
+  const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})\n`;
   const floorMessage = `📈 ${roundToDecimal(
-    extra.stats.buyNowPriceNetFees,
+    parseInt(extra.stats.buyNowPriceNetFees, 10) / LAMPORTS_PER_SOL,
     2
   )} ◎\n`;
 

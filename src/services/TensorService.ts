@@ -8,7 +8,7 @@ export interface TensorTransaction {
     txKey: string;
     txId: string;
     txType: string;
-    grossAmount: number;
+    grossAmount: string;
     grossAmountUnit: string;
     sellerId: string;
     buyerId: string;
