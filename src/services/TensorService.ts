@@ -293,7 +293,7 @@ class TensorService extends EventEmitter {
 
     const json = await response.json();
 
-    const stats = json[0].data.instrumentTV2.statsV2;
+    const stats = json.data.instrumentTV2.statsV2;
 
     this.cache.set(cacheKey, {
       expires: Date.now() + 5 * 60 * 1000,
