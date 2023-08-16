@@ -118,14 +118,14 @@ async function createDiscordSaleEmbed(
       },
       {
         name: "Price",
-        value: `${roundToDecimal(grossSaleAmount / LAMPORTS_PER_SOL, 2)} ◎ (${formattedUsdPrice})`,
+        value: `◎${roundToDecimal(grossSaleAmount / LAMPORTS_PER_SOL, 2)} (${formattedUsdPrice})`,
       },
       {
         name: "Floor",
-        value: `${roundToDecimal(
+        value: `◎${roundToDecimal(
           parseInt(extra.stats.buyNowPriceNetFees, 10) / LAMPORTS_PER_SOL,
           2
-        )} ◎`,
+        )}`,
       },
       {
         name: "Wallets",
@@ -192,17 +192,17 @@ async function sendTwitterSaleTweet(
   const rarityOrb = getRarityColorOrb(rarityClass);
 
   const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})\n`;
-  const floorMessage = `📈 ${roundToDecimal(
+  const floorMessage = `📈 ◎${roundToDecimal(
     parseInt(extra.stats.buyNowPriceNetFees, 10) / LAMPORTS_PER_SOL,
     2
-  )} ◎\n`;
+  )}\n`;
 
   const faction =
     transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")?.value || "";
 
   const factionMessage = faction ? `👥 ${faction}\n` : "";
 
-  const message = `😲 ${nftName} SOLD for ${solanaPrice} ◎\n${usdMessage}${floorMessage}${rarityMessage}${factionMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
+  const message = `😲 ${nftName} SOLD for ◎${solanaPrice}\n${usdMessage}${floorMessage}${rarityMessage}${factionMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
 
   const imageBuffer = await getImageBuffer(imageUri);
   let mediaIds: string[] = [];
