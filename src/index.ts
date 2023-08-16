@@ -111,7 +111,7 @@ async function createDiscordSaleEmbed(
       ?.value || "";
 
   const transactionLinks = [
-    `[Tensor](https://www.tensor.trade/tx/${transaction.tx.txId})`,
+    `[Tensor](https://tensor.trade/item/${onchainId})`,
     `[XRAY](https://xray.helius.xyz/tx/${transaction.tx.txId})`,
   ];
 

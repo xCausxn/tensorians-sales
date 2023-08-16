@@ -254,7 +254,7 @@ class TensorService extends EventEmitter {
   }
 
   public async getCollectionStats(slug: string): Promise<{
-    buyNowPriceNetFees: number;
+    buyNowPriceNetFees: string;
     numMints: number;
     [key: string]: any;
   }> {
