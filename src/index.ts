@@ -195,7 +195,7 @@ async function sendTwitterSaleTweet(
   const floorMessage = `📈 ◎${roundToDecimal(
     parseInt(extra.stats.buyNowPriceNetFees, 10) / LAMPORTS_PER_SOL,
     2
-  )}\n`;
+  )} floor\n`;
 
   const faction =
     transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")?.value || "";
