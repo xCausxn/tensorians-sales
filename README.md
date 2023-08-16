@@ -5,9 +5,13 @@ An example of a sales bot using Tensor.so API.
 ## Environment Variables (.env)
 
 ```
-TENSOR_API_KEY = Your Tensor.so API key
-SLUGS = comma separated list of slugs to monitor
-WEBHOOK_URLS = comma separated list of discord webhook urls to send notifications to
+TENSOR_API_KEY= Your Tensor.so API key
+SLUGS= comma separated list of slugs to monitor
+DISCORD_WEBHOOKS= comma separated list of discord webhook urls to send notifications to
+TWITTER_API_KEY=
+TWITTER_API_SECRET=
+TWITTER_ACCESS_TOKEN=
+TWITTER_ACCESS_TOKEN_SECRET=
 ```
 
 😉
