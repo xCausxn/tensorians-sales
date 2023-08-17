@@ -1,7 +1,12 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { EmbedBuilder, WebhookClient } from "discord.js";
+import {
+  AttachmentBuilder,
+  EmbedBuilder,
+  WebhookClient,
+  WebhookMessageCreateOptions,
+} from "discord.js";
 
 import TensorService, { TensorTransaction } from "./services/TensorService";
 import { nonEmptyStrValidator, roundToDecimal, smartTruncate } from "./utils";
@@ -63,8 +68,12 @@ function getRarityColorOrb(rarityTier: RarityTier): string {
 
 async function createDiscordSaleEmbed(
   transaction: TensorTransaction,
+  imageBuffer: {
+    buffer: Buffer;
+    fileType: { ext: string; mime: string } | undefined;
+  } | null,
   extra: { stats: { buyNowPriceNetFees: string; numMints: number } }
-) {
+): Promise<{ embed: EmbedBuilder; attachment: AttachmentBuilder | null }> {
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
   const imageUri = transaction.mint.imageUri;
@@ -73,6 +82,12 @@ async function createDiscordSaleEmbed(
   const rank = transaction.mint.rarityRankTT;
 
   const grossSaleAmount = parseInt(transaction.tx.grossAmount, 10);
+
+  const imageAttachment = imageBuffer
+    ? new AttachmentBuilder(imageBuffer.buffer, {
+        name: `${onchainId}.${imageBuffer.fileType?.ext}`,
+      })
+    : null;
 
   const buyerMessage = buyerId
     ? `[${buyerId.slice(
@@ -118,7 +133,9 @@ async function createDiscordSaleEmbed(
   const embed = new EmbedBuilder()
     .setTitle(`${nftName}`)
     .setURL(`https://www.tensor.trade/item/${onchainId}`)
-    .setThumbnail(imageUri)
+    .setThumbnail(
+      imageBuffer ? `attachment://${imageAttachment?.name}` : imageUri
+    )
     .addFields([
       {
         name: "Rarity",
@@ -171,10 +188,13 @@ async function createDiscordSaleEmbed(
     })
     .setTimestamp();
 
-  return embed;
+  return { embed, attachment: imageAttachment };
 }
 
-async function getImageBuffer(imageUri: string): Promise<Buffer | null> {
+async function getImageBuffer(imageUri: string): Promise<{
+  buffer: Buffer;
+  fileType: { ext: string; mime: string } | undefined;
+} | null> {
   try {
     const response = await fetch(imageUri);
 
@@ -182,9 +202,13 @@ async function getImageBuffer(imageUri: string): Promise<Buffer | null> {
       return null;
     }
 
-    const buffer = await response.arrayBuffer();
+    const arrayBuffer = await response.arrayBuffer();
 
-    return Buffer.from(buffer);
+    const buffer = Buffer.from(arrayBuffer);
+
+    const fileType = await fileTypeFromBuffer(buffer);
+
+    return { buffer, fileType };
   } catch (err) {
     return null;
   }
@@ -193,6 +217,10 @@ async function getImageBuffer(imageUri: string): Promise<Buffer | null> {
 async function sendTwitterSaleTweet(
   twitterClient: TwitterApi,
   transaction: TensorTransaction,
+  imageBuffer: {
+    buffer: Buffer;
+    fileType: { ext: string; mime: string } | undefined;
+  } | null,
   extra: { stats: { buyNowPriceNetFees: string; numMints: number } }
 ) {
   const nftName = transaction.mint.name;
@@ -234,14 +262,12 @@ async function sendTwitterSaleTweet(
 
   const message = `😲 ${nftName} SOLD for ◎${solanaPrice}\n${usdMessage}${floorMessage}${rarityMessage}${factionMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
 
-  const imageBuffer = await getImageBuffer(imageUri);
   let mediaIds: string[] = [];
 
   try {
     if (imageBuffer) {
-      const fileType = await fileTypeFromBuffer(imageBuffer);
-      const mediaId = await twitterClient.v1.uploadMedia(imageBuffer, {
-        mimeType: fileType?.mime,
+      const mediaId = await twitterClient.v1.uploadMedia(imageBuffer.buffer, {
+        mimeType: imageBuffer.fileType?.mime,
       });
       mediaIds = [mediaId];
     }
@@ -317,21 +343,38 @@ async function main() {
     }
 
     const stats = await tensorService.getCollectionStats(slug);
+    const imageBuffer = await getImageBuffer(transaction.mint.imageUri);
 
     logSaleToConsole(transaction);
 
-    const embed = await createDiscordSaleEmbed(transaction, { stats });
+    const { embed, attachment } = await createDiscordSaleEmbed(
+      transaction,
+      imageBuffer,
+      {
+        stats,
+      }
+    );
 
     for (const webhook of discordWebhooks) {
       try {
-        webhook.send({ embeds: [embed] });
+        let webhookPayload: WebhookMessageCreateOptions = {
+          embeds: [embed],
+        };
+
+        if (attachment) {
+          webhookPayload = { ...webhookPayload, files: [attachment] };
+        }
+
+        await webhook.send(webhookPayload);
       } catch (err) {
         console.error(err);
       }
     }
 
     try {
-      await sendTwitterSaleTweet(twitterClient, transaction, { stats });
+      await sendTwitterSaleTweet(twitterClient, transaction, imageBuffer, {
+        stats,
+      });
     } catch (err) {
       console.error(err);
     }
