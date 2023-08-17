@@ -119,7 +119,8 @@ async function createDiscordSaleEmbed(
   const rarityClass = getRarityTier(rank, extra.stats.numMints || 10_000);
   const rarityOrb = getRarityColorOrb(rarityClass);
 
-  const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})`;
+  const rarityMessage =
+    rank != null ? `${rarityOrb} ${rarityClass} (${rank})` : "TBD";
 
   const faction =
     transaction.mint.attributes.find((attr) => attr.trait_type === "Faction")
@@ -226,7 +227,6 @@ async function sendTwitterSaleTweet(
   const nftName = transaction.mint.name;
   const onchainId = transaction.mint.onchainId;
   const txId = transaction.tx.txId;
-  const imageUri = transaction.mint.imageUri;
   const grossSaleAmount = parseInt(transaction.tx.grossAmount, 10);
   const rank = transaction.mint.rarityRankTT;
 
@@ -248,7 +248,8 @@ async function sendTwitterSaleTweet(
   const rarityClass = getRarityTier(rank, extra.stats.numMints || 10_000);
   const rarityOrb = getRarityColorOrb(rarityClass);
 
-  const rarityMessage = `${rarityOrb} ${rarityClass} (${rank})\n`;
+  const rarityMessage =
+    rank != null ? `${rarityOrb} ${rarityClass} (${rank})` : "TBD";
   const floorMessage = `📈 ◎${roundToDecimal(
     parseInt(extra.stats.buyNowPriceNetFees, 10) / LAMPORTS_PER_SOL,
     2
@@ -260,7 +261,7 @@ async function sendTwitterSaleTweet(
 
   const factionMessage = faction ? `👥 ${faction}\n` : "";
 
-  const message = `😲 ${nftName} SOLD for ◎${solanaPrice}\n${usdMessage}${floorMessage}${rarityMessage}${factionMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
+  const message = `😲 ${nftName} SOLD for ◎${solanaPrice}\n${usdMessage}${floorMessage}${rarityMessage}\n${factionMessage}\n→ ${marketplaceUrl}\n\n📝 https://xray.helius.xyz/tx/${txId}`;
 
   let mediaIds: string[] = [];
 
