@@ -132,8 +132,7 @@ async function createDiscordSaleEmbed(
       },
       {
         name: "\n",
-        value: "",
-        inline: true,
+        value: "\n",
       },
       {
         name: "Price",
@@ -153,7 +152,7 @@ async function createDiscordSaleEmbed(
       },
       {
         name: "\n",
-        value: "",
+        value: "\n",
       },
       {
         name: "Wallets",
