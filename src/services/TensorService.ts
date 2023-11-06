@@ -182,7 +182,7 @@ class TensorService extends EventEmitter {
             __typename
           }
         }
-        
+
         fragment ReducedLinkedTx on LinkedTransactionTV2 {
           tx {
             ...ReducedParsedTx
@@ -194,7 +194,7 @@ class TensorService extends EventEmitter {
           }
           __typename
         }
-        
+
         fragment ReducedParsedTx on ParsedTransaction {
           source
           txKey
@@ -215,7 +215,7 @@ class TensorService extends EventEmitter {
           poolOnchainId
           __typename
         }
-        
+
         fragment ReducedMint on TLinkedTxMintTV2 {
           onchainId
           name
@@ -225,7 +225,10 @@ class TensorService extends EventEmitter {
           sellRoyaltyFeeBPS
           tokenStandard
           tokenEdition
-          attributes
+          attributes {
+            trait_type
+            value
+          }
           lastSale {
             price
             priceUnit
@@ -236,7 +239,7 @@ class TensorService extends EventEmitter {
           ...MintRarityFields
           __typename
         }
-        
+
         fragment MintRarityFields on TLinkedTxMintTV2 {
           rarityRankTT
           rarityRankTTStat
